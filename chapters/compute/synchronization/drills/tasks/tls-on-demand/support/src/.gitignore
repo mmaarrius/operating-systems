@@ -1,0 +1,3 @@
+# Ignore compiled binaries
+race_condition_tls
+*.o
