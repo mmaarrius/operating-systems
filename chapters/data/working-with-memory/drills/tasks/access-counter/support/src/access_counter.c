@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+/* Enable POSIX feature definitions so siginfo_t, SA_SIGINFO, etc. are exposed. */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,14 +15,15 @@
 #include "utils.h"
 #include "access_counter.h"
 
-struct page_info {
+struct page_info
+{
 	int prot;
 	void *start;
 };
 
 unsigned long counter;
 
-#define MAX_PAGES	16
+#define MAX_PAGES 16
 static struct page_info pages[MAX_PAGES];
 static size_t num_pages;
 
@@ -40,18 +46,22 @@ static void access_handler(int signum, siginfo_t *si, void *arg)
 
 	counter++;
 
-	if (signum != SIGSEGV) {
+	if (signum != SIGSEGV)
+	{
 		fprintf(stderr, "Unable to handle signal %d (%s)\n", signum, strsignal(signum));
 		return;
 	}
 
-	/* TODO: Obtain page start address in start variable. */
+	/* Obtain page start address in start variable. */
+	start = (void *)((unsigned long)si->si_addr & ~(page_size - 1));
+	log_debug("start: %p", start);
 
 	for (i = 0; i < num_pages; i++)
 		if (pages[i].start == start)
 			break;
 
-	if (i >= num_pages && i < MAX_PAGES) {
+	if (i >= num_pages && i < MAX_PAGES)
+	{
 		pages[i].start = start;
 		pages[i].prot = PROT_NONE;
 		num_pages += 1;
@@ -59,7 +69,29 @@ static void access_handler(int signum, siginfo_t *si, void *arg)
 
 	log_debug("i = %u", i);
 
-	/* TODO: Update page protections with mprotect(). */
+	/* Update page protections with mprotect(). */
+	switch (pages[i].prot)
+	{
+	case PROT_NONE:
+		rc = mprotect(start, page_size, PROT_READ);
+		DIE(rc < 0, "mprotect");
+		pages[i].prot = PROT_READ;
+		break;
+	case PROT_READ:
+		rc = mprotect(start, page_size, PROT_READ | PROT_WRITE);
+		DIE(rc < 0, "mprotect");
+		pages[i].prot = PROT_WRITE;
+		break;
+	case PROT_WRITE:
+		rc = mprotect(start, page_size, PROT_READ | PROT_WRITE | PROT_EXEC);
+		DIE(rc < 0, "mprotect");
+		/* Optimistically copy some bytes of code so execution will succeed. */
+		memcpy(start, do_nothing, 64);
+		pages[i].prot = PROT_EXEC;
+		break;
+	default:
+		break;
+	}
 }
 
 void register_sigsegv_handler(void)

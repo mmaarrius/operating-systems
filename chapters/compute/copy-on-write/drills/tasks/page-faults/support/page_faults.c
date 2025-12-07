@@ -58,7 +58,7 @@ int main(void)
 	getchar();
 
 	DIE(fstat(fd, &filestat) != 0, "fstat");
-	DIE(posix_fadvise(fd, 0, filestat.st_size, POSIX_FADV_DONTNEED) != 0, "posix_fadvise");
+	// DIE(posix_fadvise(fd, 0, filestat.st_size, POSIX_FADV_DONTNEED) != 0, "posix_fadvise");
 
 
 	printf("Press enter to map file into memory\n");
@@ -71,6 +71,8 @@ int main(void)
 	getchar();
 
 	printf("%s\n", data);
+
+
 
 	printf("Press enter to close file\n");
 	getchar();
